@@ -14,9 +14,6 @@ for element in postcodes:
     complete_url.append(pure_ulr + element)
 
 
-x=[]
-
-
 def collector():
     url = "https://www.just-eat.co.uk/area/g12"
     headers = {
@@ -33,16 +30,50 @@ def collector():
     session = requests.Session()
     html_content = session.get(url, headers=headers).text
     soup = BeautifulSoup(html_content, 'lxml')
-    rest_div = soup.find('div', attrs={'class': 'l-col l-col--xs-4 l-col--md-8 l-col--lg-offset-1'})
-    for restaurants_divs in rest_div:
-        rest_div.find('div', attrs={'class': re.compile('c-serp__list/g')})
-    return restaurants_divs
+    rest_divs = soup('div', attrs={'class': ['o-tile c-restaurant', 'o-tile c-restaurant c-restaurant--offline']})
+    type(rest_divs)
+    return rest_divs
 
 
-def url_scraper(soup):
-   hrefs = soup.find_all('a')
-   for href in hrefs:
-       print(href['href'])
+def url_scraper(rest_divs):
+    result_urls = []
+    url_base = 'https://www.just-eat.co.uk'
+    for hrefs in rest_divs:
+        for link in hrefs('a'):
+            if link.has_attr('href'):
+                result_urls.append(url_base + link.attrs['href'])
+    print(result_urls)
 
 
-url_scraper(collector())
+def img_links_scraper(rest_divs):
+    result_img_urls = []
+    for img_urls in rest_divs:
+        for link in img_urls('img'):
+            if link.has_attr('src'):
+                result_img_urls.append(link.attrs['src'])
+    print(result_img_urls)
+
+
+def name_scraper(rest_divs):
+    result_names = []
+    for names in rest_divs:
+        for text in (names('h2')):
+            result_names.append(text.contents)
+    print(result_names)
+
+
+def food_type_scraper(rest_divs):
+    result_food_type = []
+    for p_text in rest_divs:
+        for food_type in p_text('p', class_='c-restaurant__cuisine'):
+            result_food_type.append(food_type.text)
+    print(result_food_type)
+
+
+def rest_adress_scraper(rest_divs):
+    result_adress = []
+    for p_text in rest_divs:
+        for adress in p_text('p', attrs={'class': 'c-restaurant__address'}):
+            result_adress.append(adress.text)
+    print(result_adress)
+
