@@ -1,7 +1,8 @@
 import requests
 from bs4 import BeautifulSoup
 from csv import DictReader
-import re
+import dataset
+import sqlite3
 
 
 with open('postcodes.csv') as f:
@@ -14,8 +15,7 @@ for element in postcodes:
     complete_url.append(pure_ulr + element)
 
 
-def collector():
-    url = "https://www.just-eat.co.uk/area/g12"
+def collector(url):
     headers = {
         'Host': 'www.just-eat.co.uk',
 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:58.0) Gecko/20100101 Firefox/58.0',
@@ -31,49 +31,23 @@ def collector():
     html_content = session.get(url, headers=headers).text
     soup = BeautifulSoup(html_content, 'lxml')
     rest_divs = soup('div', attrs={'class': ['o-tile c-restaurant', 'o-tile c-restaurant c-restaurant--offline']})
-    type(rest_divs)
     return rest_divs
 
+def page_scraper(rest_divs):
+    rest_data = {}
+    for data in rest_divs:
+        for names in data('h2'):
+            rest_data['Rest names'] = names.text
+        for urls in data('a'):
+            if urls.has_attr('href'):
+                rest_data['Rest url'] = 'https://www.just-eat.co.uk' + urls.atts['href']
+        for imgs in data('img'):
+            if imgs.has_attr('src'):
+                rest_data['Rest img'] = 'https:' + imgs.attrs['src']
+        for food_type in data('p', attrs={'class', 'c-restaurant__cuisine'}):
+            rest_data['Food type'] = food_type.text
+        for adress in data('p', attrs={'class', 'c-restaurant__address'}):
+            rest_data['Rest address'] = adress.text
+    print(rest_data)
 
-def url_scraper(rest_divs):
-    result_urls = []
-    url_base = 'https://www.just-eat.co.uk'
-    for hrefs in rest_divs:
-        for link in hrefs('a'):
-            if link.has_attr('href'):
-                result_urls.append(url_base + link.attrs['href'])
-    print(result_urls)
-
-
-def img_links_scraper(rest_divs):
-    result_img_urls = []
-    for img_urls in rest_divs:
-        for link in img_urls('img'):
-            if link.has_attr('src'):
-                result_img_urls.append(link.attrs['src'])
-    print(result_img_urls)
-
-
-def name_scraper(rest_divs):
-    result_names = []
-    for names in rest_divs:
-        for text in (names('h2')):
-            result_names.append(text.contents)
-    print(result_names)
-
-
-def food_type_scraper(rest_divs):
-    result_food_type = []
-    for p_text in rest_divs:
-        for food_type in p_text('p', class_='c-restaurant__cuisine'):
-            result_food_type.append(food_type.text)
-    print(result_food_type)
-
-
-def rest_adress_scraper(rest_divs):
-    result_adress = []
-    for p_text in rest_divs:
-        for adress in p_text('p', attrs={'class': 'c-restaurant__address'}):
-            result_adress.append(adress.text)
-    print(result_adress)
-
+page_scraper(collector('https://www.just-eat.co.uk/area/g11-hillhead'))
