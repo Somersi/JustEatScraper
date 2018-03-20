@@ -1,18 +1,27 @@
 import requests
 from bs4 import BeautifulSoup
 from csv import DictReader
+from urllib.parse import urljoin
 import dataset
-import sqlite3
+from multiprocessing.dummy import Pool
 
 
-with open('postcodes.csv') as f:
-    postcodes = [row['postcode'] for row in DictReader(f)]
-    urls_with_postcodes = []
-    pure_ulr = 'https://www.just-eat.co.uk/area/'
+DB = dataset.connect('sqlite:///test.db')['rest']
 
-complete_url = []
-for element in postcodes:
-    complete_url.append(pure_ulr + element)
+
+ROOT_URL = 'https://www.just-eat.co.uk'
+IMG_ROOT_URL = 'https:'
+
+
+def url_creator():
+    with open('postcodes.csv') as f:
+        postcodes = [row['postcode'] for row in DictReader(f)]
+        pure_ulr = 'https://www.just-eat.co.uk/area/'
+
+    complete_url = []
+    for element in postcodes:
+        complete_url.append(pure_ulr + element)
+    return complete_url
 
 
 def collector(url):
@@ -33,21 +42,49 @@ def collector(url):
     rest_divs = soup('div', attrs={'class': ['o-tile c-restaurant', 'o-tile c-restaurant c-restaurant--offline']})
     return rest_divs
 
-def page_scraper(rest_divs):
-    rest_data = {}
-    for data in rest_divs:
-        for names in data('h2'):
-            rest_data['Rest names'] = names.text
-        for urls in data('a'):
-            if urls.has_attr('href'):
-                rest_data['Rest url'] = 'https://www.just-eat.co.uk' + urls.atts['href']
-        for imgs in data('img'):
-            if imgs.has_attr('src'):
-                rest_data['Rest img'] = 'https:' + imgs.attrs['src']
-        for food_type in data('p', attrs={'class', 'c-restaurant__cuisine'}):
-            rest_data['Food type'] = food_type.text
-        for adress in data('p', attrs={'class', 'c-restaurant__address'}):
-            rest_data['Rest address'] = adress.text
-    print(rest_data)
 
-page_scraper(collector('https://www.just-eat.co.uk/area/g11-hillhead'))
+def page_scraper(rest_divs):
+    results = []
+    # rest_data = dict.fromkeys(['Rest names', 'Rest urls', 'Rest img', 'Food type', 'Rest address'])
+    for data in rest_divs:
+        item = {}
+        item['rest_name'] = data.h2.text
+
+        datahref = data.a
+        if datahref:
+            item['rest_url'] = urljoin(ROOT_URL, data.a['href'])
+        else:
+            item['rest_url'] = 'N/A'
+
+        imgnode = data.find('img', attrs={'data-ft': 'restaurantDetailsLogo'})
+        if not imgnode:
+            imgnode = data.img
+
+        item['rest_img'] = urljoin(IMG_ROOT_URL, imgnode['data-original'])
+        item['food_type'] = data.find('p', attrs={'class': 'c-restaurant__cuisine'}).text
+        item['rest_address'] = data.find('p', attrs={'class': 'c-restaurant__address'}).text
+        results.append(item)
+    return results
+
+
+def write_to_db(items):
+    DB.insert_many(items)
+    return True
+
+
+def tosamoe(url):
+    collected_url = collector(url)
+    return page_scraper(collected_url)
+
+urls = url_creator()[:10]
+# for url in urls:
+#    print(tosamoe(url))
+pool = Pool(2)
+results = pool.map(tosamoe, urls)
+pool.close()
+pool.join()
+for result in results:
+    write_to_db(result)
+# results = page_scraper(collector('https://www.just-eat.co.uk/area/g11-hillhead'))
+# print(results)
+# write_to_db(results)
